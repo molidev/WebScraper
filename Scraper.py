@@ -36,7 +36,7 @@ class WebScraper:
         else:
             return self.dict_teams.get(team_name)
 
-    def crear_datos_partido(self, competicion, jornadasObtenidas, temporada, estadio, jornada_fecha, arbitro, equipo_local, equipo_visitante, goles_local, goles_visitante):
+    def crear_datos_partido(self, competicion, jornadasObtenidas, temporada, estadio, jornada_fecha, arbitro, equipo_local, equipo_visitante, goles_local, goles_visitante, goleadores):
         match_element = etree.Element("match")
         
         etree.SubElement(match_element, "competition").text = competicion
@@ -83,6 +83,12 @@ class WebScraper:
         etree.SubElement(full_time_element, "home_team").text = str(home_goals)
         etree.SubElement(full_time_element, "away_team").text = str(away_goals)
         
+        if goleadores:
+            scorers_element = etree.SubElement(match_element, "scorers");
+            for goleador,minuto in goleadores:
+                scorer_element = etree.SubElement(scorers_element, "scorer");
+                etree.SubElement(scorer_element, "name").text = str(goleador.text)
+                etree.SubElement(scorer_element, "minute").text = str(minuto)
         return match_element
 
     def anadir_al_fichero(self, element, file_path_out):
@@ -117,7 +123,7 @@ class WebScraper:
                 print("https://www.bdfutbol.com/es" + fila.xpath('./td[1]/a/@href')[0][2:])
                 tree_match = html.fromstring(page_match.text)
 
-                time.sleep(np.random.randint(6, 10))
+                time.sleep(np.random.randint(0.5, 1))
 
                 competicion = tree_match.xpath('/html/body/div[3]/div[2]/div[1]/div/div[1]/div[2]/a')
                 if competicion:
@@ -178,7 +184,6 @@ class WebScraper:
         with open("FootballMatches.xml", "a") as file:
             file.write('</matches>\n')
     
-
     def obtener_datos_liga(self, url, jornadas, temporada):
         with open("FootballMatches"+temporada+".xml", "w") as file:
             file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -188,15 +193,14 @@ class WebScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
             'Accept-Language': 'es'
         }
-
+        page_season = requests.get(url+"?tab=results&jornada=-", headers=headers)
+        tree = html.fromstring(page_season.text)
         jornadasTotales = jornadas
         for jornadasObtenidas in range(1, jornadasTotales+1):
-            page_season = requests.get(url+"?tab=results&jornada="+str(jornadasObtenidas), headers=headers)
-            tree = html.fromstring(page_season.text)
 
             #print(url+"?tab=results&jornada="+str(jornadasObtenidas))
-        
-            filas_partidos = tree.xpath('//table[@class="taula_estil taula_estil-16"]/tr/td/a/@href')
+            path = '//table[@class="taula_estil taula_estil-16"]/tr[@class="jornadai ij'+str(jornadasObtenidas)+'"]/td/a/@href'
+            filas_partidos = tree.xpath(path)
             for fila in filas_partidos:
                 #Hacemos petición a la página del partido
                 if not fila.endswith(".html"):
@@ -204,7 +208,27 @@ class WebScraper:
                     print("https://www.bdfutbol.com/es" + fila[2:])
                     tree_match = html.fromstring(page_match.text)
 
-                    time.sleep(np.random.randint(4, 8))
+                    time.sleep(np.random.randint(0.5, 1))
+
+                    path_goles = '//div[@class="row pt-1 pt-md-3 pb-2 text-center mb-0 mb-md-4"]/div/div/div[@class="text-blanc"]/a'
+                    goleadores = tree_match.xpath(path_goles)
+                    
+                    path_minutos = '//div[@class="row pt-1 pt-md-3 pb-2 text-center mb-0 mb-md-4"]/div/div/div[@class="text-blanc"]/text()'
+                    minutos = tree_match.xpath(path_minutos)
+                    
+                    minutos_formateados = []
+                    for minuto in minutos:
+                        minuto = minuto.strip()
+                        minuto = minuto.replace("'", "")
+                        minuto = minuto.replace("\r\n", "")
+                        minuto = minuto.split()
+                        if minuto and minuto[0].isdigit():
+                            minutos_formateados.append(int(minuto[0]))
+
+                    goleadores_y_minutos = list(zip(goleadores, minutos_formateados))
+
+                    if(len(goleadores) == 0):
+                        goleadores = None
 
                     competicion = tree_match.xpath('/html/body/div[3]/div[2]/div[1]/div/div[1]/div[2]/a')
                     if competicion:
@@ -255,14 +279,14 @@ class WebScraper:
                         goles_visitante = "sin dato"
 
                     #print(competicion.text + " " + estadio.text + " " + jornada_fecha.text + " " + equipo_local.text + " VS "+ equipo_visitante.text + " " + goles_local.text + " - "+ goles_visitante.text + " " + arbitro)
-                    match = self.crear_datos_partido(competicion, jornadasObtenidas, temporada, estadio, jornada_fecha, arbitro, equipo_local, equipo_visitante, goles_local, goles_visitante)
+                    match = self.crear_datos_partido(competicion, jornadasObtenidas, temporada, estadio, jornada_fecha, arbitro, equipo_local, equipo_visitante, goles_local, goles_visitante, goleadores_y_minutos)
                     self.anadir_al_fichero(match, "FootballMatches"+temporada+".xml")
                     self.linksProcesador += 1
                     print("Partidos procesados: " + str(self.linksProcesador))
         
         with open("FootballMatches"+temporada+".xml", "a") as file:
             file.write('</matches>\n')
-
+            
 scraper = WebScraper()
 #scraper.obtener_links_temporadas()
 scraper.obtener_datos_liga("https://www.bdfutbol.com/es/t/t2022-23.html", 38, "2022-23")
