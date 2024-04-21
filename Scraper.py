@@ -1,3 +1,4 @@
+
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
@@ -123,7 +124,6 @@ class WebScraper:
                 print("https://www.bdfutbol.com/es" + fila.xpath('./td[1]/a/@href')[0][2:])
                 tree_match = html.fromstring(page_match.text)
 
-                time.sleep(np.random.randint(0.5, 1))
 
                 competicion = tree_match.xpath('/html/body/div[3]/div[2]/div[1]/div/div[1]/div[2]/a')
                 if competicion:
@@ -184,11 +184,7 @@ class WebScraper:
         with open("FootballMatches.xml", "a") as file:
             file.write('</matches>\n')
     
-    def obtener_datos_liga(self, url, jornadas, temporada):
-        with open("FootballMatches"+temporada+".xml", "w") as file:
-            file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-            file.write('<matches>\n')
-        
+    def obtener_datos_temporada(self, url, jornadas, temporada):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
             'Accept-Language': 'es'
@@ -205,10 +201,8 @@ class WebScraper:
                 #Hacemos petición a la página del partido
                 if not fila.endswith(".html"):
                     page_match = requests.get("https://www.bdfutbol.com/es" + fila[2:], headers=headers)
-                    print("https://www.bdfutbol.com/es" + fila[2:])
+                    #print("https://www.bdfutbol.com/es" + fila[2:])
                     tree_match = html.fromstring(page_match.text)
-
-                    time.sleep(np.random.randint(0.5, 1))
 
                     path_goles = '//div[@class="row pt-1 pt-md-3 pb-2 text-center mb-0 mb-md-4"]/div/div/div[@class="text-blanc"]/a'
                     goleadores = tree_match.xpath(path_goles)
@@ -280,14 +274,27 @@ class WebScraper:
 
                     #print(competicion.text + " " + estadio.text + " " + jornada_fecha.text + " " + equipo_local.text + " VS "+ equipo_visitante.text + " " + goles_local.text + " - "+ goles_visitante.text + " " + arbitro)
                     match = self.crear_datos_partido(competicion, jornadasObtenidas, temporada, estadio, jornada_fecha, arbitro, equipo_local, equipo_visitante, goles_local, goles_visitante, goleadores_y_minutos)
-                    self.anadir_al_fichero(match, "FootballMatches"+temporada+".xml")
+                    self.anadir_al_fichero(match, "FootballMatches.xml")
                     self.linksProcesador += 1
-                    print("Partidos procesados: " + str(self.linksProcesador))
-        
-        with open("FootballMatches"+temporada+".xml", "a") as file:
+                    #print("Partidos procesados: " + str(self.linksProcesador))
+
+    def obtener_temporadas(self, temporada_minima):
+        with open("FootballMatches.xml", "w", encoding='utf-8') as file:
+            file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            file.write('<matches>\n')
+
+        while temporada_minima < 2023: 
+            temporada = f"{temporada_minima}-{str(temporada_minima + 1)[-2:]}"
+            url = "https://www.bdfutbol.com/es/t/t"+str(temporada)+".html";
+            scraper.obtener_datos_temporada(url, 38, temporada)
+            print(url)
+            temporada_minima += 1
+
+        with open("FootballMatches.xml", "a", encoding='utf-8') as file:
             file.write('</matches>\n')
-            
+
+
 scraper = WebScraper()
-#scraper.obtener_links_temporadas()
-scraper.obtener_datos_liga("https://www.bdfutbol.com/es/t/t2022-23.html", 38, "2022-23")
+
+scraper.obtener_temporadas(2020)
 #scraper.obtener_datos()
